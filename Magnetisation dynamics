@@ -1,0 +1,88 @@
+
+// Define mesh parameters
+Nx := 128 * 16
+Ny := 32 * 2
+Nz := 1
+
+Xsize := 240e-9 * 16
+Ysize := 60e-9 * 2
+Zsize := 10e-9
+
+Cx := Xsize / Nx
+Cy := Ysize / Ny
+Cz := Zsize / Nz
+
+SetGridSize(Nx, Ny, Nz)
+SetCellSize(Cx, Cy, Cz)
+
+// Material parameters for YIG
+MaxErr = 1e-8
+
+alpha_guideline := 2e-4
+Msat_guideline := 1.4e5
+Aex_guideline := 3.5e-12
+B1_guideline := -8e5
+
+alpha = alpha_guideline 
+Msat = Msat_guideline
+Aex = Aex_guideline
+B1 = B1_guideline
+
+// Define region for YIG
+DefRegion(1, rect(Xsize, Ysize))
+Msat.setRegion(1, Msat)
+Aex.setRegion(1, Aex)
+alpha.setRegion(1, alpha)
+
+// Define initial parameters for the delta pulse
+Hd := 50.0  // Delta pulse field strength in mT
+f_pulse := 6e9  // Frequency of delta pulse (Hz)
+delta_duration := 1e-10  // Duration of delta pulse (seconds)
+
+// Define speed parameter for moving perturbation
+speed := 5000  // Speed of perturbation in m/s
+pulse_width := 20e-9  // Width of the moving pulse (m)
+Y_center := 20e-9  // Center position of the pulse along Y
+
+t_end := 100e-9  // Total run time for simulation
+print("Running simulation for speed: " + speed + " m/s")
+for t := 0.0; t < t_end; t += 1e-11 {
+    pos := speed * t  // Position of the moving pulse
+    if pos > Xsize {
+        break
+    }
+    
+    // Define moving rectangular region at speed 'speed'
+    pulse_region := rect(pulse_width, Ysize).transl(pos - Xsize/2, Y_center - Ysize/2, 0)
+    DefRegion(2, pulse_region)
+    
+    // Define delta pulse magnetic field for initial perturbation
+    if t <= delta_duration {
+        B_ext = vector(Hd * 1e-3 * cos(2 * pi * f_pulse * t), 0, 0)
+    } else {
+        B_ext = vector(0, 0, 0)  // No magnetic field after delta pulse
+    }
+    B_ext.setRegion(2, B_ext)
+    
+    // Apply sinusoidal SAW strain after initial delta pulse
+    if t > delta_duration {
+        exx := 3 * 1e-5 * sin(2 * pi * f_pulse * t)  // Longitudinal strain component for enhanced coupling
+        exy := 1 * 1e-5 * cos(2 * pi * f_pulse * t)  // Shear strain component for enhanced interaction
+        eyy := 1 * 1e-5 * sin(2 * pi * f_pulse * t)  // Transverse strain component
+        // Note: These strain fields are represented here for reference and conceptual modeling
+    }
+    
+    // Relax the system to simulate the impact of the moving pulse
+    run(1e-11)  // Incremental simulation at each time step
+}
+
+// Take snapshots of the magnetization after the pulse has passed
+snapshot(m)
+snapshot(m.Comp(0))  // m_x component
+snapshot(m.Comp(1))  // m_y component
+snapshot(m.Comp(2))  // m_z component
+
+// Autosave data
+autosave(m, 1e-9)
+snapshot(m)
+save(m)
